@@ -30,6 +30,18 @@ services:
     volumes:
       - postgres_bigdata_data:/var/lib/postgresql/data
 
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    ports:
+      - "5050:80" # Truy cập UI qua: http://localhost:5050
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: Admin@123
+    depends_on:
+      - postgres-source
+      - postgres-big-data
+
   # 2. Apache Kafka Broker (Chạy chế độ KRaft)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -37,6 +49,8 @@ services:
     ports:
       - "9092:9092"
     environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
       KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
@@ -61,6 +75,8 @@ services:
     ports:
       - "8081:8081"
     environment:
+      SCHEMA_REGISTRY_HEAP_OPTS: "-Xms128m -Xmx256m"
+
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:29092'
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
@@ -73,7 +89,10 @@ services:
     container_name: kafka-connect
     ports:
       - "8083:8083"
+    command: /etc/confluent/docker/run
     environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+
       # BẮT BUỘC PHẢI CÓ TIỀN TỐ CONNECT_ CHO MỌI BIẾN MÔI TRƯỜNG
       CONNECT_BOOTSTRAP_SERVERS: 'kafka:29092'
       CONNECT_REST_PORT: '8083'
@@ -95,6 +114,11 @@ services:
       # Đường dẫn chứa Plugins
       CONNECT_PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components'
 
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
   # 5. UI quản lý Kafka (AKHQ)
   akhq:
     image: tchiotludo/akhq:0.24.0
@@ -114,68 +138,68 @@ services:
                 - name: debezium
                   url: "http://kafka-connect:8083"
 
-  namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    container_name: namenode
-    restart: always
-    ports:
-      - "9870:9870"   # Web UI HDFS
-      - "9000:9000"   # Port HDFS IPC
-    environment:
-      - CLUSTER_NAME=hadoop-cluster
-    env_file:
-      - ./hadoop.env
-    volumes:
-      - hadoop_namenode_data:/hadoop/dfs/name
+  # namenode:
+  #   image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+  #   container_name: namenode
+  #   restart: always
+  #   ports:
+  #     - "9870:9870"   # Web UI HDFS
+  #     - "9000:9000"   # Port HDFS IPC
+  #   environment:
+  #     - CLUSTER_NAME=hadoop-cluster
+  #   env_file:
+  #     - ./hadoop.env
+  #   volumes:
+  #     - hadoop_namenode_data:/hadoop/dfs/name
 
-  # --- BỔ SUNG: HADOOP DATANODE ---
-  datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-    container_name: datanode
-    restart: always
-    ports:
-      - "9864:9864"
-    depends_on:
-      - namenode
-    env_file:
-      - ./hadoop.env
-    volumes:
-      - hadoop_datanode_data:/hadoop/dfs/data
+  # # --- BỔ SUNG: HADOOP DATANODE ---
+  # datanode:
+  #   image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+  #   container_name: datanode
+  #   restart: always
+  #   ports:
+  #     - "9864:9864"
+  #   depends_on:
+  #     - namenode
+  #   env_file:
+  #     - ./hadoop.env
+  #   volumes:
+  #     - hadoop_datanode_data:/hadoop/dfs/data
 
-  # --- SPARK MASTER (APACHE OFFICIAL) ---
-  spark-master:
-    image: apache/spark:3.5.0
-    container_name: spark-master
-    depends_on:
-      - namenode
-    ports:
-      - "8085:8080"   # Spark Web UI Master
-      - "7077:7077"   # Port Spark Master IPC
-    environment:
-      - SPARK_NO_DAEMONIZE=true
-    volumes:
-      - ./spark-apps:/opt/spark-apps
-    command:
-      - "/opt/spark/bin/spark-class"
-      - "org.apache.spark.deploy.master.Master"
+  # # --- SPARK MASTER (APACHE OFFICIAL) ---
+  # spark-master:
+  #   image: apache/spark:3.5.0
+  #   container_name: spark-master
+  #   depends_on:
+  #     - namenode
+  #   ports:
+  #     - "8085:8080"   # Spark Web UI Master
+  #     - "7077:7077"   # Port Spark Master IPC
+  #   environment:
+  #     - SPARK_NO_DAEMONIZE=true
+  #   volumes:
+  #     - ./spark-apps:/opt/spark-apps
+  #   command:
+  #     - "/opt/spark/bin/spark-class"
+  #     - "org.apache.spark.deploy.master.Master"
 
-  # --- SPARK WORKER (APACHE OFFICIAL) ---
-  spark-worker:
-    image: apache/spark:3.5.0
-    container_name: spark-worker
-    depends_on:
-      - spark-master
-    environment:
-      - SPARK_NO_DAEMONIZE=true
-      - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=2g
-    command:
-      - "/opt/spark/bin/spark-class"
-      - "org.apache.spark.deploy.worker.Worker"
-      - "spark://spark-master:7077"
+  # # --- SPARK WORKER (APACHE OFFICIAL) ---
+  # spark-worker:
+  #   image: apache/spark:3.5.0
+  #   container_name: spark-worker
+  #   depends_on:
+  #     - spark-master
+  #   environment:
+  #     - SPARK_NO_DAEMONIZE=true
+  #     - SPARK_WORKER_CORES=2
+  #     - SPARK_WORKER_MEMORY=2g
+  #   command:
+  #     - "/opt/spark/bin/spark-class"
+  #     - "org.apache.spark.deploy.worker.Worker"
+  #     - "spark://spark-master:7077"
   
 volumes:
   postgres_source_data:
   postgres_bigdata_data:
-  hadoop_namenode_data:   # <--- Volume mới cho NameNode
-  hadoop_datanode_data:
+  # hadoop_namenode_data:
+  # hadoop_datanode_data:

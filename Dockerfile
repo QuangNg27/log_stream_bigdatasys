@@ -7,3 +7,7 @@ RUN confluent-hub install --no-prompt confluentinc/kafka-connect-avro-converter:
 RUN mkdir -p /usr/share/confluent-hub-components/debezium-connector-postgres \
     && curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.4.0.Final/debezium-connector-postgres-2.4.0.Final-plugin.tar.gz \
        | tar -xz -C /usr/share/confluent-hub-components/debezium-connector-postgres --strip-components=1
+
+RUN confluent-hub install --no-prompt \
+    --component-dir /usr/share/confluent-hub-components \
+    confluentinc/kafka-connect-jdbc:10.7.4
