@@ -1,18 +1,36 @@
+#!/bin/bash
+
+# Giá trị mặc định
+CONNECT_HOST="localhost"
+CONNECT_PORT="8083"
+
+# Đọc tham số truyền vào
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --connect-host=*) CONNECT_HOST="${1#*=}" ;;
+    --connect-host)   CONNECT_HOST="$2"; shift ;;
+    --connect-port=*) CONNECT_PORT="${1#*=}" ;;
+    --connect-port)   CONNECT_PORT="$2"; shift ;;
+  esac
+  shift
+done
+
 curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
-  http://localhost:8083/connectors/ \
+  "http://${CONNECT_HOST}:${CONNECT_PORT}/connectors/" \
   -d '{
     "name": "postgres-bigdata-sink",
     "config": {
       "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
       "tasks.max": "1",
-      "topics": "cdc_data.public.users",
+      "topics": "cdc_v2.public.users",
+      "table.name.format": "users",
       
       "connection.url": "jdbc:postgresql://postgres-big-data:5432/bigdata_db",
       "connection.user": "admin",
       "connection.password": "Admin@123",
       
       "insert.mode": "upsert",
-      "pk.mode": "record_key",
+      "pk.mode": "record_value",
       "pk.fields": "id",
       "auto.create": "true",
       "auto.evolve": "true",

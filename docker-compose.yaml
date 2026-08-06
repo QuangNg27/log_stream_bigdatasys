@@ -119,6 +119,31 @@ services:
         limits:
           memory: 1g
 
+  kafka-connect-init:
+    image: curlimages/curl:latest
+    container_name: kafka-connect-init
+    depends_on:
+      - kafka-connect
+    volumes:
+      - ./register-debezium.sh:/register-debezium.sh
+      - ./sink-connector.sh:/sink-connector.sh
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        echo "Waiting for Kafka Connect to be ready..."
+        until curl -s -f http://kafka-connect:8083/connectors > /dev/null; do
+          sleep 3
+        done
+        echo "Kafka Connect is ready! Registering connectors..."
+        
+        # Gọi Source script
+        sh /register-debezium.sh --connect-host=kafka-connect --connect-port=8083
+        
+        # Gọi Sink script
+        sh /sink-connector.sh --connect-host=kafka-connect --connect-port=8083
+        
+        echo "All connectors registered successfully!"
+
   # 5. UI quản lý Kafka (AKHQ)
   akhq:
     image: tchiotludo/akhq:0.24.0
