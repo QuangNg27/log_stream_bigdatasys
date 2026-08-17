@@ -5,7 +5,7 @@ from delta.tables import DeltaTable
 
 def process_bronze_to_silver(spark, bronze_path, silver_path, pk_col="id"):
     print(f"--- Đang đọc dữ liệu Bronze từ: {bronze_path} ---")
-    df_bronze = spark.read.parquet(bronze_path)
+    df_bronze = spark.read.format("delta").load(bronze_path)
 
     # Kiểm tra xem bảng Delta Silver đã tồn tại chưa
     is_silver_exists = DeltaTable.isDeltaTable(spark, silver_path)

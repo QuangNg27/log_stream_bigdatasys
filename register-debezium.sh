@@ -67,6 +67,6 @@ curl -i -X POST \
     "key.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
-    "tombstones.on.delete": "true"
+    "tombstones.on.delete": "false"
   }
 }'

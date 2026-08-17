@@ -19,7 +19,9 @@ def get_latest_schema_from_registry(registry_url, topic_name):
 def main():
     spark = SparkSession.builder \
         .appName("Bronze_Debezium_Avro_SchemaRegistry") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-avro_2.12:3.5.0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-avro_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0") \
+        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
@@ -40,8 +42,8 @@ def main():
         .option("startingOffsets", "earliest") \
         .load()
 
-    # 3. Cắt 5 bytes Magic Header của Confluent Wire Format
-    binary_df = raw_kafka_df.select(
+    # 3. Lọc bỏ tombstone (value null) và Cắt 5 bytes Magic Header của Confluent Wire Format
+    binary_df = raw_kafka_df.filter(col("value").isNotNull()).select(
         expr("substring(value, 6, length(value)-5)").alias("avro_payload"),
         col("timestamp")
     )
@@ -70,15 +72,14 @@ def main():
         day("timestamp").alias("day")
     )
 
-    # 5. Ghi xuống HDFS
+    # 5. Ghi xuống HDFS dưới định dạng Delta Lake
     query = parsed_df.writeStream \
-        .format("parquet") \
+        .format("delta") \
         .partitionBy("year", "month", "day") \
-        .trigger(processingTime="10 minutes") \
-        .option("path", "hdfs://namenode:9000/lakehouse/bronze/users/") \
+        .trigger(processingTime="5 seconds") \
         .option("checkpointLocation", "hdfs://namenode:9000/lakehouse/checkpoints/bronze_users/") \
         .outputMode("append") \
-        .start()
+        .start("hdfs://namenode:9000/lakehouse/bronze/users/")
 
     query.awaitTermination()
 
