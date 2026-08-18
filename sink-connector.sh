@@ -22,7 +22,7 @@ curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" 
     "config": {
       "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
       "tasks.max": "1",
-      "topics": "cdc_v2.public.users",
+      "topics": "cdc_data.public.users",
       "table.name.format": "users",
       
       "connection.url": "jdbc:postgresql://postgres-big-data:5432/bigdata_db",
