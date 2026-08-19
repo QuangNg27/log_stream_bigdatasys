@@ -65,8 +65,7 @@ curl -i -X POST \
       "auto.create": "true",
       "auto.evolve": "true",
       
-      "key.converter": "io.confluent.connect.avro.AvroConverter",
-      "key.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
+      "key.converter": "org.apache.kafka.connect.storage.StringConverter",
       "value.converter": "io.confluent.connect.avro.AvroConverter",
       "value.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
       

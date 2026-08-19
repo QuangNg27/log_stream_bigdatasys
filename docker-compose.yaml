@@ -256,6 +256,7 @@ services:
     command:
       - |
         echo "Initializing Apache Superset..."
+        pip install clickhouse-connect
         superset db upgrade
         superset fab create-admin --username admin --firstname Admin --lastname User --email admin@lakehouse.com --password admin || true
         superset init

@@ -1,4 +1,5 @@
 import json
+import time
 import urllib.request
 from pyspark.sql import SparkSession
 from pyspark.sql.avro.functions import from_avro
@@ -51,9 +52,10 @@ def start_stream_for_table(spark, table_name, schema_registry_url, bootstrap_ser
     )
 
     query = parsed_df.writeStream \
+        .queryName(f"stream_{table_name}") \
         .format("delta") \
         .partitionBy("year", "month", "day") \
-        .trigger(processingTime="5 seconds") \
+        .trigger(processingTime="10 minutes") \
         .option("checkpointLocation", f"hdfs://namenode:9000/lakehouse/checkpoints/bronze_{table_name}/") \
         .outputMode("append") \
         .start(f"hdfs://namenode:9000/lakehouse/bronze/{table_name}/")
@@ -66,6 +68,7 @@ def main():
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-avro_2.12:3.5.0,io.delta:delta-spark_2.12:3.1.0") \
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+        .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true") \
         .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
@@ -82,8 +85,23 @@ def main():
         except Exception as e:
             print(f"Bỏ qua bảng '{tbl}' do chưa có topic trên Kafka Connect: {e}")
 
-    print(f"Đang chạy đồng thời {len(queries)} stream queries trong 1 Spark App!")
-    spark.streams.awaitAnyTermination()
+    print(f"\n✅ Đang chạy đồng thời {len(queries)} stream queries trong 1 Spark App liên tục!")
+    
+    # Duy trì tiến trình Spark Streaming sống vĩnh viễn và giám sát ngoại lệ
+    try:
+        while True:
+            for q in queries:
+                if not q.isActive:
+                    print(f"⚠️ Cảnh báo: Stream '{q.name}' không còn active!")
+                    if q.exception():
+                        print(f"❌ Chi tiết lỗi Stream '{q.name}': {q.exception()}")
+                        raise q.exception()
+            time.sleep(10)
+    except KeyboardInterrupt:
+        print("\n⏹️ Nhận lệnh dừng từ người dùng. Đang dừng tất cả các streams...")
+        for q in queries:
+            q.stop()
+        spark.stop()
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script Đăng ký Debezium Source Connector cho PostgreSQL CDC
+# Script Đăng ký Debezium Source Connector riêng biệt cho từng bảng
 # ==============================================================================
 
 # Giá trị mặc định
@@ -16,7 +16,7 @@ SCHEMA_TABLE="public.users"
 TOPIC_PREFIX="cdc_data"
 SCHEMA_REGISTRY_URL="http://schema-registry:8081"
 
-# Đọc tham số có tên đi kèm (--key=value hoặc -key value)
+# Đọc tham số truyền vào
 while [ $# -gt 0 ]; do
   case "$1" in
     --connect-host=*) CONNECT_HOST="${1#*=}" ;;
@@ -41,14 +41,12 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Tự động trích xuất tên bảng và tạo tên Connector duy nhất
-CURRENT_DATE=$(date +%Y%m%d)
 TABLE_ONLY=$(echo "$SCHEMA_TABLE" | awk -F'.' '{print $NF}')
-CONNECTOR_NAME="postgres-${DB_NAME}-${TABLE_ONLY}-${CURRENT_DATE}-connector"
+CONNECTOR_NAME="postgres-source-${TABLE_ONLY}-connector"
+SLOT_NAME="debezium_${TABLE_ONLY}_slot"
 
-echo "Đang đăng ký Debezium Source Connector cho bảng: ${SCHEMA_TABLE} (Connector: ${CONNECTOR_NAME})..."
+echo "Đang đăng ký Debezium Source Connector cho bảng: ${SCHEMA_TABLE} (Connector: ${CONNECTOR_NAME}, Slot: ${SLOT_NAME})..."
 
-# Thực thi gửi request tạo connector
 curl -i -X POST \
   -H "Accept:application/json" \
   -H "Content-Type:application/json" \
@@ -69,12 +67,11 @@ curl -i -X POST \
     "table.include.list": "'"$SCHEMA_TABLE"'",
     "publication.name": "dbz_publication",
     "publication.autocreate.mode": "disabled",
-    "key.converter": "io.confluent.connect.avro.AvroConverter",
-    "key.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
+    "slot.name": "'"$SLOT_NAME"'",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
-    "tombstones.on.delete": "false",
-    "message.key.columns": "public.users:id;public.devices:id;public.cam_bills:id;(.*):id"
+    "tombstones.on.delete": "false"
   }
 }'
 echo ""
