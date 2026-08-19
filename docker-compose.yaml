@@ -261,6 +261,26 @@ services:
         superset init
         /usr/bin/run-server.sh
 
+  # 10. Gold Layer / High-Speed OLAP Engine (ClickHouse)
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.9
+    container_name: clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"   # HTTP Web / Superset / DBeaver HTTP
+      - "9009:9000"   # Native TCP protocol
+    environment:
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=Admin@123
+      - CLICKHOUSE_DB=gold_db
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
 volumes:
   postgres_source_data:
   postgres_bigdata_data:
@@ -268,4 +288,5 @@ volumes:
   hadoop_namenode_data:
   hadoop_datanode_data:
   superset_data:
-  # n8n_data:
+  clickhouse_data:
+  n8n_data:

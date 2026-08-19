@@ -21,14 +21,15 @@ show_usage() {
     echo "Các lệnh hỗ trợ:"
     echo "  bronze [-d]    : Chạy job streaming Kafka -> Bronze Delta (Thêm -d để chạy ngầm)"
     echo "  silver         : Chạy job batch Bronze -> Silver Delta Merge"
+    echo "  gold           : Chạy job tổng hợp Silver -> Gold Marts đẩy vào ClickHouse"
     echo "  check          : Đọc và hiển thị dữ liệu tầng Silver"
     echo "  help           : Hiển thị hướng dẫn này"
     echo ""
     echo "Ví dụ:"
-    echo "  ./run-spark.sh bronze       # Chạy streaming"
     echo "  ./run-spark.sh bronze -d    # Chạy streaming ở chế độ ngầm"
     echo "  ./run-spark.sh silver       # Chạy merge silver"
-    echo "  ./run-spark.sh check        # Xem bảng silver"
+    echo "  ./run-spark.sh gold         # Chạy tổng hợp đẩy sang ClickHouse Gold"
+    echo "  ./run-spark.sh check        # Xem các bảng silver"
 }
 
 case "$1" in
@@ -52,12 +53,21 @@ case "$1" in
         ;;
 
     silver)
-        echo "🔄 Đang chạy Bronze -> Silver Delta Merge..."
+        echo "🔄 Đang chạy Bronze -> Silver Delta Merge cho toàn bộ các bảng..."
         docker exec -it $SPARK_MASTER_CONTAINER /opt/spark/bin/spark-submit \
             --master $SPARK_MASTER_URL \
             --packages $DELTA_PACKAGES \
             $DELTA_CONF \
             /opt/spark-apps/bronze_to_silver.py
+        ;;
+
+    gold)
+        echo "🌟 Đang tổng hợp dữ liệu Silver -> Gold Marts đẩy vào ClickHouse..."
+        docker exec -it $SPARK_MASTER_CONTAINER /opt/spark/bin/spark-submit \
+            --master $SPARK_MASTER_URL \
+            --packages $DELTA_PACKAGES \
+            $DELTA_CONF \
+            /opt/spark-apps/silver_to_gold_clickhouse.py
         ;;
 
     check)
