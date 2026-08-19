@@ -63,8 +63,11 @@ services:
       KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_LOG_RETENTION_HOURS: 24
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
   # 3. Confluent Schema Registry
   schema-registry:
@@ -134,14 +137,17 @@ services:
         until curl -s -f http://kafka-connect:8083/connectors > /dev/null; do
           sleep 3
         done
-        echo "Kafka Connect is ready! Registering connectors..."
+        echo "Kafka Connect is ready! Auto-registering Source & Sink connectors for all tables..."
         
-        # Gọi Source script
-        sh /register-debezium.sh --connect-host=kafka-connect --connect-port=8083
+        for tbl in users devices cam_bills; do
+          echo ">>> [1/2] Registering Debezium Source for: public.$$tbl"
+          sh /register-debezium.sh --connect-host=kafka-connect --connect-port=8083 --table=public.$$tbl
+          
+          echo ">>> [2/2] Registering JDBC Sink for: $$tbl"
+          sh /sink-connector.sh --connect-host=kafka-connect --connect-port=8083 --table=$$tbl --topic=cdc_data.public.$$tbl
+        done
         
-        sh /sink-connector.sh --connect-host=kafka-connect --connect-port=8083
-        
-        echo "All connectors registered successfully!"
+        echo "All Source & Sink connectors registered successfully!"
 
   # 5. UI quản lý Kafka
   kafka-ui:
@@ -156,87 +162,110 @@ services:
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
 
-  # namenode:
-  #   image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-  #   container_name: namenode
-  #   restart: always
-  #   ports:
-  #     - "9870:9870"   # Web UI HDFS
-  #     - "9000:9000"   # Port HDFS IPC
-  #   environment:
-  #     - CLUSTER_NAME=hadoop-cluster
-  #   env_file:
-  #     - ./hadoop.env
-  #   volumes:
-  #     - hadoop_namenode_data:/hadoop/dfs/name
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - "9870:9870"   # Web UI HDFS
+      - "9000:9000"   # Port HDFS IPC
+    environment:
+      - CLUSTER_NAME=hadoop-cluster
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - hadoop_namenode_data:/hadoop/dfs/name
 
-  # # --- BỔ SUNG: HADOOP DATANODE ---
-  # datanode:
-  #   image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-  #   container_name: datanode
-  #   restart: always
-  #   ports:
-  #     - "9864:9864"
-  #   depends_on:
-  #     - namenode
-  #   env_file:
-  #     - ./hadoop.env
-  #   volumes:
-  #     - hadoop_datanode_data:/hadoop/dfs/data
+  # --- BỔ SUNG: HADOOP DATANODE ---
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    ports:
+      - "9864:9864"
+    depends_on:
+      - namenode
+    env_file:
+      - ./hadoop.env
+    volumes:
+      - hadoop_datanode_data:/hadoop/dfs/data
 
-  # # --- SPARK MASTER (APACHE OFFICIAL) ---
-  # spark-master:
-  #   image: apache/spark:3.5.0
-  #   container_name: spark-master
-  #   depends_on:
-  #     - namenode
-  #   ports:
-  #     - "8085:8080"   # Spark Web UI Master
-  #     - "7077:7077"   # Port Spark Master IPC
-  #   environment:
-  #     - SPARK_NO_DAEMONIZE=true
-  #   volumes:
-  #     - ./spark-apps:/opt/spark-apps
-  #   command:
-  #     - "/opt/spark/bin/spark-class"
-  #     - "org.apache.spark.deploy.master.Master"
+  # --- SPARK MASTER (APACHE OFFICIAL) ---
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: spark-master
+    depends_on:
+      - namenode
+    ports:
+      - "8085:8080"   # Spark Web UI Master
+      - "7077:7077"   # Port Spark Master IPC
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+    command:
+      - "/opt/spark/bin/spark-class"
+      - "org.apache.spark.deploy.master.Master"
 
-  # # --- SPARK WORKER (APACHE OFFICIAL) ---
-  # spark-worker:
-  #   image: apache/spark:3.5.0
-  #   container_name: spark-worker
-  #   depends_on:
-  #     - spark-master
-  #   environment:
-  #     - SPARK_NO_DAEMONIZE=true
-  #     - SPARK_WORKER_CORES=2
-  #     - SPARK_WORKER_MEMORY=2g
-  #   command:
-  #     - "/opt/spark/bin/spark-class"
-  #     - "org.apache.spark.deploy.worker.Worker"
-  #     - "spark://spark-master:7077"
+  # --- SPARK WORKER (APACHE OFFICIAL) ---
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+    command:
+      - "/opt/spark/bin/spark-class"
+      - "org.apache.spark.deploy.worker.Worker"
+      - "spark://spark-master:7077"
   
   # 6. Workflow Automation & Notification (n8n)
-  n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
-    container_name: n8n
+  # n8n:
+  #   image: docker.n8n.io/n8nio/n8n:latest
+  #   container_name: n8n
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5678:5678"
+  #   environment:
+  #     - N8N_HOST=localhost
+  #     - N8N_PORT=5678
+  #     - N8N_PROTOCOL=http
+  #     - NODE_ENV=production
+  #     - WEBHOOK_URL=http://localhost:5678/
+  #     - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+  #     - TZ=Asia/Ho_Chi_Minh
+  #   volumes:
+  #     - n8n_data:/home/node/.n8n
+
+  # 9. Business Intelligence & Reporting Dashboard (Apache Superset)
+  superset:
+    image: apache/superset:3.1.0
+    container_name: superset
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      - "8088:8088"
     environment:
-      - N8N_HOST=localhost
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
-      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
-      - TZ=Asia/Ho_Chi_Minh
+      - SUPERSET_SECRET_KEY=superset_secret_key_antigravity_123456
+      - TALISMAN_ENABLED=False
     volumes:
-      - n8n_data:/home/node/.n8n
+      - superset_data:/app/superset_home
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        echo "Initializing Apache Superset..."
+        superset db upgrade
+        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@lakehouse.com --password admin || true
+        superset init
+        /usr/bin/run-server.sh
 
 volumes:
   postgres_source_data:
   postgres_bigdata_data:
-  n8n_data:
-  # hadoop_namenode_data:
-  # hadoop_datanode_data:
+  kafka_data:
+  hadoop_namenode_data:
+  hadoop_datanode_data:
+  superset_data:
+  # n8n_data:

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# ==============================================================================
+# Script Đăng ký Debezium Source Connector cho PostgreSQL CDC
+# ==============================================================================
+
 # Giá trị mặc định
 CONNECT_HOST="localhost"
 CONNECT_PORT="8083"
@@ -37,12 +41,14 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Tự động lấy ngày tháng và tên bảng
+# Tự động trích xuất tên bảng và tạo tên Connector duy nhất
 CURRENT_DATE=$(date +%Y%m%d)
 TABLE_ONLY=$(echo "$SCHEMA_TABLE" | awk -F'.' '{print $NF}')
 CONNECTOR_NAME="postgres-${DB_NAME}-${TABLE_ONLY}-${CURRENT_DATE}-connector"
 
-# Thực thi gửi request duy nhất
+echo "Đang đăng ký Debezium Source Connector cho bảng: ${SCHEMA_TABLE} (Connector: ${CONNECTOR_NAME})..."
+
+# Thực thi gửi request tạo connector
 curl -i -X POST \
   -H "Accept:application/json" \
   -H "Content-Type:application/json" \
@@ -68,6 +74,7 @@ curl -i -X POST \
     "value.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter.schema.registry.url": "'"$SCHEMA_REGISTRY_URL"'",
     "tombstones.on.delete": "false",
-    "message.key.columns": "public.users:id"
+    "message.key.columns": "public.users:id;public.devices:id;public.cam_bills:id;(.*):id"
   }
 }'
+echo ""
