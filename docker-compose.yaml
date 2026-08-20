@@ -353,7 +353,7 @@ services:
       - postgres-big-data
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:Admin@123@postgres-big-data:5432/airflow_db
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:Admin@123@postgres-big-data:5432/bigdata_db
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key_antigravity_123456
       - _AIRFLOW_DB_MIGRATE=true
@@ -365,7 +365,21 @@ services:
       - ./spark-apps:/opt/spark-apps
       - ./data_lake_source:/opt/data_lake_source
 
-  # 15. Enterprise Data Governance Hub (OpenMetadata Server - New Image)
+  # 15. Dedicated PostgreSQL Backend for OpenMetadata (Local Image)
+  postgres-openmetadata:
+    image: postgres:15-alpine
+    container_name: postgres-openmetadata
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=openmetadata_user
+      - POSTGRES_PASSWORD=OpenMetadata@123
+      - POSTGRES_DB=openmetadata_db
+    volumes:
+      - openmetadata_postgres_data:/var/lib/postgresql/data
+
+  # 16. Enterprise Data Governance Hub (OpenMetadata Server - New Image)
   openmetadata-server:
     image: docker.getcollate.io/openmetadata/server:1.3.1
     container_name: openmetadata-server
@@ -373,14 +387,14 @@ services:
     ports:
       - "8585:8585"   # OpenMetadata Web UI: http://localhost:8585
     depends_on:
-      - postgres-big-data
+      - postgres-openmetadata
       - elasticsearch
     environment:
       - SERVER_PORT=8585
-      - DB_HOST=postgres-big-data
+      - DB_HOST=postgres-openmetadata
       - DB_PORT=5432
-      - DB_USER=admin
-      - DB_PASSWORD=Admin@123
+      - DB_USER=openmetadata_user
+      - DB_PASSWORD=OpenMetadata@123
       - DB_DATABASE=openmetadata_db
       - SEARCH_HOST=elasticsearch
       - SEARCH_PORT=9200
@@ -413,4 +427,5 @@ volumes:
   minio_data:
   nifi_data:
   elasticsearch_data:
+  openmetadata_postgres_data:
   openmetadata_data:
