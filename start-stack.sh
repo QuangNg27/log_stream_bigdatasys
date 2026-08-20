@@ -44,7 +44,6 @@ SERVICES_OPT1=(
 # Danh sách containers Option 2
 SERVICES_OPT2=(
   minio
-  minio-init-buckets
   nifi
   clickhouse
   superset

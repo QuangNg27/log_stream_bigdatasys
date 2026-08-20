@@ -79,23 +79,25 @@ Script [`start-stack.sh`](start-stack.sh) cung cấp 2 chế độ chạy độc
 Script [`seed.sh`](seed.sh) hỗ trợ sinh dữ liệu đa nguồn: **PostgreSQL CDC**, **IoT Camera Logs** (`.json`), và **Tệp CSV đối soát cước** (`.csv`).
 
 ```bash
-# 1. Sinh toàn bộ dữ liệu lịch sử từ đầu năm đến nay (~8 tháng, từ 01/01/2026)
+# 1. Sinh ĐỒNG LOẠT cả 3 nguồn dữ liệu lịch sử từ 01/01/2026 đến nay (~8 tháng)
 ./seed.sh --from-start-of-year
 
 # 2. Xóa sạch DB cũ và sinh lại toàn bộ lịch sử từ đầu năm
 ./seed.sh --reset --from-start-of-year
 
-# 3. Sinh dữ liệu lịch sử của 30 ngày gần nhất
+# 3. [Dành cho Option 2] Bỏ qua Postgres, chỉ sinh file Logs & CSV đối soát
+./seed.sh --from-start-of-year --skip-db
+
+# 4. Chỉ sinh riêng từng nguồn nếu cần:
+./seed.sh --from-start-of-year --only-db     # Chỉ nạp vào PostgreSQL Source
+./seed.sh --from-start-of-year --only-logs   # Chỉ sinh file JSON IoT Logs
+./seed.sh --from-start-of-year --only-files  # Chỉ sinh file CSV Đối soát cước
+
+# 5. Sinh dữ liệu lịch sử của 30 ngày gần nhất
 ./seed.sh --days 30
 
-# 4. Sinh dữ liệu trong một khoảng ngày cụ thể
-./seed.sh --start-date 2026-03-01 --end-date 2026-06-30
-
-# 5. Chạy giả lập Traffic Streaming liên tục theo thời gian thực (nhấn Ctrl+C để dừng)
+# 6. Chạy giả lập Traffic Streaming liên tục theo thời gian thực (nhấn Ctrl+C để dừng)
 ./seed.sh --stream --interval 1.5
-
-# 6. Chạy Batch nhanh 20 bản ghi tại thời điểm hiện tại
-./seed.sh --count 20
 ```
 
 *File Logs và CSV đối soát sẽ được tự động xuất vào thư mục `./data_lake_source/`.*

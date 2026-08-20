@@ -295,22 +295,8 @@ services:
       - MINIO_ROOT_PASSWORD=Admin@123
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
-
-  minio-init-buckets:
-    image: minio/minio:RELEASE.2024-04-18T19-09-19Z
-    container_name: minio-init-buckets
-    depends_on:
-      - minio
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - |
-        echo "Waiting for MinIO to start..."
-        sleep 5
-        mkdir -p /data/source-logs-bucket/incoming /data/source-logs-bucket/processed /data/source-files-bucket/incoming /data/source-files-bucket/processed
-        echo "Source S3 Buckets created successfully in MinIO!"
-    volumes:
-      - minio_data:/data
+      - ./data_lake_source/logs:/data/source-logs-bucket/incoming
+      - ./data_lake_source/files:/data/source-files-bucket/incoming
 
   # 12. DataFlow / Batching & Direct Ingestion (Apache NiFi - Local Image)
   nifi:

@@ -516,10 +516,11 @@ def main():
     parser.add_argument("--output-dir", type=str, default="./data_lake_source", help="Thư mục lưu trữ file Logs và CSV đối soát")
     parser.add_argument("--logs-per-day", type=int, default=300, help="Số lượng log events trung bình mỗi ngày (Mặc định: 300)")
     
-    parser.add_argument("--count", type=int, default=10, help="Số lượng giao dịch tạo ở chế độ Batch đơn giản (Mặc định: 10)")
-    parser.add_argument("--stream", action="store_true", help="Bật chế độ Continuous Streaming liên tục thời gian thực")
-    parser.add_argument("--interval", type=float, default=2.0, help="Khoảng cách giữa các đợt phát sinh sự kiện streaming (giây)")
-    parser.add_argument("--reset", action="store_true", help="Xóa sạch dữ liệu cũ trong PostgreSQL trước khi seed")
+    # Cờ tùy chọn từng nguồn dữ liệu
+    parser.add_argument("--skip-db", action="store_true", help="Bỏ qua nạp vào PostgreSQL (chỉ sinh file Logs và CSV, thích hợp cho Option 2)")
+    parser.add_argument("--only-db", action="store_true", help="Chỉ sinh và nạp vào PostgreSQL")
+    parser.add_argument("--only-logs", action="store_true", help="Chỉ sinh file IoT Camera Logs")
+    parser.add_argument("--only-files", action="store_true", help="Chỉ sinh file Payment Reconciliation CSV")
 
     args = parser.parse_args()
 
@@ -527,7 +528,7 @@ def main():
     print("🚀 ENTERPRISE DATA SEEDER & HISTORICAL GENERATOR")
     print("=======================================================")
 
-    if args.reset:
+    if args.reset and not args.skip_db and not args.only_logs and not args.only_files:
         reset_database()
 
     today = date.today()
@@ -546,12 +547,26 @@ def main():
 
         print(f"🎯 Kích hoạt chế độ sinh dữ liệu Lịch sử Đa nguồn từ {s_date} đến {e_date}")
         
-        users, devices, bills = seed_historical_database(s_date, e_date, args.output_dir)
-        generate_historical_camera_logs(devices, s_date, e_date, args.output_dir, args.logs_per_day)
-        generate_historical_reconciliation_files(bills, s_date, e_date, args.output_dir)
+        # 1. Sinh DB Postgres (nếu không bị skip)
+        users, devices, bills = [], [], []
+        if not args.skip_db and not args.only_logs and not args.only_files:
+            users, devices, bills = seed_historical_database(s_date, e_date, args.output_dir)
+        elif args.skip_db or args.only_logs or args.only_files:
+            # Tạo mock list nhẹ trong bộ nhớ nếu không ghi vào Postgres
+            print("ℹ️ Bỏ qua ghi vào PostgreSQL (chỉ sinh dữ liệu tệp)")
+            devices = [(i, f"Device_{i}") for i in range(1, 200)]
+            bills = [(i, i % 50 + 1, i, 150000.0, "monthly", "paid", int(time.time() * 1000)) for i in range(1, 500)]
+
+        # 2. Sinh IoT Camera Logs
+        if not args.only_db and not args.only_files:
+            generate_historical_camera_logs(devices, s_date, e_date, args.output_dir, args.logs_per_day)
+
+        # 3. Sinh Payment Reconciliation CSVs
+        if not args.only_db and not args.only_logs:
+            generate_historical_reconciliation_files(bills, s_date, e_date, args.output_dir)
 
         print("\n=======================================================")
-        print("🎉 HOÀN THÀNH TẤT CẢ 3 NGUỒN DỮ LIỆU LỊCH SỬ THÀNH CÔNG!")
+        print("🎉 HOÀN THÀNH TẤT CẢ CÁC NGUỒN DỮ LIỆU ĐÃ CHỌN!")
         print(f"📁 Thư mục đầu ra Files & Logs: {os.path.abspath(args.output_dir)}")
         print("=======================================================\n")
 
